@@ -102,6 +102,7 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
   if ~isfield(opts,'store'), opts.store = 'n'; end
   if ~isfield(opts,'symm'), opts.symm = 'n'; end
   if ~isfield(opts,'verb'), opts.verb = 0; end
+  if ~isfield(opts,'proxybylevel'), opts.proxybylevel = 0; end
 
   % check inputs
   opts.store = lower(opts.store);
@@ -139,6 +140,16 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
     t.nodes(i).xi = [];
   end
   if opts.verb, fprintf('%3s | %63.2e\n','t',te); end
+
+  % pre-compute level-dependent proxy functions if requested
+  pxyfunlvl = cell(t.nlvl, 1);
+  if opts.proxybylevel
+    for lvl = 1:t.nlvl
+      pxyfunlvl{lvl} = pxyfun(lvl);
+    end
+  else
+    pxyfunlvl(:) = {pxyfun};
+  end
 
   % count nonempty boxes at each level
   pblk = zeros(t.nlvl+1,1);
@@ -219,7 +230,7 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
       % compress row space
       Kpxy = zeros(length(rslf),0);
       if isempty(pxyfun), cnbr = setdiff(find(crem),cslf);
-      else, [Kpxy,cnbr] = pxyfun('r',rx,cx,rslf,cdir,l,t.nodes(i).ctr);
+      else, [Kpxy,cnbr] = pxyfunlvl{lvl}('r',rx,cx,rslf,cdir,l,t.nodes(i).ctr);
       end
       K = [full(A(rslf,cnbr)) Kpxy]';
       [rsk,rrd,rT] = id(K,rank_or_tol,opts.Tmax,opts.rrqr_iter);
@@ -228,7 +239,7 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
       if opts.symm == 'n'
         Kpxy = zeros(0,length(cslf));
         if isempty(pxyfun), rnbr = setdiff(find(rrem),rslf);
-        else, [Kpxy,rnbr] = pxyfun('c',rx,cx,cslf,rdir,l,t.nodes(i).ctr);
+        else, [Kpxy,rnbr] = pxyfunlvl{lvl}('c',rx,cx,cslf,rdir,l,t.nodes(i).ctr);
         end
         K = [full(A(rnbr,cslf)); Kpxy];
         [csk,crd,cT] = id(K,rank_or_tol,opts.Tmax,opts.rrqr_iter);
@@ -343,7 +354,7 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
           cfar = setdiff(find(crem),[cslf cnbr]);
           K = A(rslf,cfar);
         else
-          K = pxyfun('r',rx,cx,rslf,cnbr,l,t.nodes(i).ctr);
+          K = pxyfunlvl{lvl}('r',rx,cx,rslf,cnbr,l,t.nodes(i).ctr);
         end
       else
         K = zeros(length(rslf),0);
@@ -357,7 +368,7 @@ function F = ifmm(A,rx,cx,occ,rank_or_tol,pxyfun,opts)
             rfar = setdiff(find(rrem),[rslf rnbr]);
             K = A(rfar,cslf);
           else
-            K = pxyfun('c',rx,cx,cslf,rnbr,l,t.nodes(i).ctr);
+            K = pxyfunlvl{lvl}('c',rx,cx,cslf,rnbr,l,t.nodes(i).ctr);
           end
         else
           K = zeros(0,length(cslf));
